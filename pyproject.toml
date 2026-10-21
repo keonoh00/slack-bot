@@ -8,3 +8,13 @@ dependencies = [
     "fastapi[standard]>=0.151.0",
     "slack-bolt>=1.30.0",
 ]
+
+
+[tool.poe.tasks]
+dev = { cmd = "fastapi dev", envfile = ".env.dev" }
+prod = { cmd = "fastapi run", envfile = ".env.prod" }
+
+[dependency-groups]
+dev = [
+    "poethepoet>=0.49.0",
+]
