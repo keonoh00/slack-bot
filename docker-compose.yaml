@@ -1,3 +1,5 @@
+name: slack-bot-dev
+
 services:
   redis:
     image: redis:8-alpine
@@ -6,9 +8,11 @@ services:
       - "127.0.0.1:6379:6379"
     volumes:
       - ./redis-data:/data
-    command:
-      - redis-server
-      - --save
-      - "${REDIS_ARG_SAVE}"
-      - --appendonly
-      - "${REDIS_ARG_APPENDONLY}"
+    command: redis-server --save "" --appendonly no
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - ./qdrant-data:/qdrant/storage
