@@ -1,0 +1,143 @@
+import argparse
+import asyncio
+import json
+from functools import lru_cache
+
+from langchain_core.messages import ToolMessage
+from langchain_core.messages.utils import count_tokens_approximately
+from langchain_core.tools import tool
+from qdrant_client import AsyncQdrantClient
+
+from app.config.env import env
+
+MODEL_NAME = env.qdrant.MODEL
+COLLECTION = env.qdrant.COLLECTION
+QDRANT_URL = env.qdrant.URL
+MAX_RAG_TOKENS = 2500
+
+
+@lru_cache(maxsize=1)
+def getEncoder():
+    from sentence_transformers import SentenceTransformer
+
+    return SentenceTransformer(MODEL_NAME, local_files_only=True)
+
+
+def limitResults(results: list[dict]) -> list[dict]:
+    selected = []
+
+    for result in results:
+        candidate = selected + [result]
+
+        tokens = count_tokens_approximately(
+            [
+                ToolMessage(
+                    content=json.dumps(candidate, ensure_ascii=False),
+                    tool_call_id="rag",
+                )
+            ],
+            chars_per_token=2.0,
+        )
+
+        if tokens > MAX_RAG_TOKENS:
+            break
+
+        selected.append(result)
+
+    return selected
+
+
+def embedQuery(query: str) -> list[float]:
+    return (
+        getEncoder()
+        .encode_query(
+            query,
+            normalize_embeddings=True,
+        )
+        .tolist()
+    )
+
+
+async def _searchDocument(query: str, limit: int = 5) -> list[dict]:
+    if not query.strip():
+        raise ValueError("Search query cannot be empty.")
+
+    # Generate query embedding without blocking the event loop.
+    vector = await asyncio.to_thread(embedQuery, query)
+
+    # Search Qdrant asynchronously.
+    client = AsyncQdrantClient(url=QDRANT_URL)
+
+    try:
+        response = await client.query_points(
+            collection_name=COLLECTION,
+            query=vector,
+            limit=limit,
+            with_payload=True,
+        )
+    finally:
+        await client.close()
+
+    results = [
+        {
+            "score": point.score,
+            **(point.payload or {}),
+        }
+        for point in response.points
+    ]
+
+    return limitResults(results)
+
+
+@tool
+async def searchRAGTool(query: str, limit: int = 5) -> list[dict]:
+    """
+    Search Qdrant for document chunks semantically similar to the query.
+
+    Args:
+        query: Natural language search query.
+        limit: Maximum number of matching chunks to return.
+
+    Returns:
+        List of matching chunks containing similarity scores,
+        document text, section information, and page numbers.
+    """
+    return await _searchDocument(query, limit)
+
+
+async def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Search indexed PDF documents in Qdrant."
+    )
+    parser.add_argument("query", help="Natural language search query")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum number of results (default: 5)",
+    )
+
+    args = parser.parse_args()
+
+    if args.limit < 1:
+        parser.error("--limit must be greater than zero")
+
+    results = await _searchDocument(args.query, args.limit)
+
+    if not results:
+        print("No results found.")
+        return
+
+    for i, result in enumerate(results, start=1):
+        print(f"\n{'=' * 20} Result {i} {'=' * 20}")
+        print(f"Score: {result['score']:.4f}")
+        print(f"Source: {result.get('source', '')}")
+        print(f"Section: {result.get('section', '')}")
+        print(
+            f"Pages: {result.get('page_start', '?')}-" f"{result.get('page_end', '?')}"
+        )
+        print(f"\n{result.get('text', '')}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
