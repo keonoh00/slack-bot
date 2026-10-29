@@ -14,3 +14,5 @@ wheels/
 
 # Redis data
 redis-data/
+
+data/pdf/devops.pdf
