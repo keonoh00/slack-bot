@@ -4,8 +4,8 @@ from pydantic import BaseModel, SecretStr
 
 
 class SlackSettings(BaseModel):
-    appToken: SecretStr
-    botToken: SecretStr
+    BOT_TOKEN: SecretStr
+    SIGNING_SECRET: SecretStr
 
 
 class RedisSettings(BaseModel):
@@ -19,8 +19,8 @@ class EnvVariables(BaseModel):
 
 env = EnvVariables(
     slack=SlackSettings(
-        appToken=SecretStr(os.environ["SLACK_CODE_MASTER_APP_TOKEN"]),
-        botToken=SecretStr(os.environ["SLACK_CODE_MASTER_BOT_TOKEN"]),
+        BOT_TOKEN=SecretStr(os.environ["SLACK_CODE_MASTER_BOT_TOKEN"]),
+        SIGNING_SECRET=SecretStr(os.environ["SLACK_CODE_MASTER_SIGNING_SECRET"]),
     ),
     redis=RedisSettings(
         url=os.environ["REDIS_URL"],
