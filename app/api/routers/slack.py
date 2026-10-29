@@ -25,6 +25,17 @@ async def receiveEvents(request: Request) -> dict[str, str | bool]:
     if isinstance(payload, UrlVerification):
         return {"challenge": payload.challenge}
 
+    event = getattr(payload, "event", None)
+
+    print(
+        f"event_id={getattr(payload, 'eventId', None)} "
+        f"type={getattr(event, 'type', payload.type)} "
+        f"ts={getattr(event, 'ts', None)} "
+        f"bot_id={getattr(event, 'botId', None)} "
+        f"retry={request.headers.get('x-slack-retry-num')}",
+        flush=True,
+    )
+
     if isinstance(payload, EventCallback):
         event = payload.event
 
