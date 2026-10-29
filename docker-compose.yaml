@@ -28,6 +28,7 @@ services:
     command: >
       --model ${VLLM_MODEL:-Qwen/Qwen3.8-27B-FP8}
       --max-model-len ${VLLM_MAX_LEN:-32768}
+      --max-cudagraph-capture-size 32
     deploy:
       resources:
         reservations:
