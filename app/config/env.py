@@ -12,9 +12,16 @@ class RedisSettings(BaseModel):
     url: str
 
 
+class vLLMSettings(BaseModel):
+    API_KEY: SecretStr
+    URL: str
+    MODEL: str
+
+
 class EnvVariables(BaseModel):
     slack: SlackSettings
     redis: RedisSettings
+    vllm: vLLMSettings
 
 
 env = EnvVariables(
@@ -24,5 +31,10 @@ env = EnvVariables(
     ),
     redis=RedisSettings(
         url=os.environ["REDIS_URL"],
+    ),
+    vllm=vLLMSettings(
+        API_KEY=SecretStr(os.environ["VLLM_API_KEY"]),
+        URL=os.environ["VLLM_BASE_URL"],
+        MODEL=os.environ["VLLM_MODEL"],
     ),
 )
