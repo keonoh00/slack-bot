@@ -23,6 +23,7 @@ dev-api = { cmd = "fastapi dev", envfile = ".env.dev" }
 dev-docker = { cmd = "docker compose up -d", envfile = ".env.dev" }
 dev-celery = { cmd = "watchfiles --filter python 'celery -A app.celery:celeryApp worker --loglevel=INFO --pool=solo' app", envfile = ".env.dev" }
 dev-tunnel = { cmd = "cloudflared tunnel run --token $CLOUDFLARE_TUNNEL_TOKEN", envfile = ".env.dev" }
+rag-index = { cmd = "python data/pdf/index.py", envfile = ".env.dev" }
 
 
 [dependency-groups]
