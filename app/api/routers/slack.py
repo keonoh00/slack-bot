@@ -1,7 +1,10 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import ValidationError
 
-from app.slack.schemas import UrlVerification, slackPayloadAdapter
+from app.celery.tasks import replyToSlack
+from app.slack.schemas import EventCallback, UrlVerification, slackPayloadAdapter
 from app.slack.services import signatureVerifier
 
 slackRouter = APIRouter(prefix="/slack", tags=["slack"])
@@ -21,5 +24,19 @@ async def receiveEvents(request: Request) -> dict[str, str | bool]:
 
     if isinstance(payload, UrlVerification):
         return {"challenge": payload.challenge}
+
+    if isinstance(payload, EventCallback):
+        event = payload.event
+
+        if event.type != "app_mention" or event.botId is not None:
+            return {"ok": True}
+        threadTs = event.threadTs or event.ts
+        await asyncio.to_thread(
+            replyToSlack.delay,
+            event.channel,
+            event.text,
+            event.threadTs or event.ts,
+            event.ts,
+        )
 
     return {"ok": True}
