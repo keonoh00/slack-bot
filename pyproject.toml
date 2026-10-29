@@ -25,6 +25,8 @@ dev-celery = { cmd = "watchfiles --filter python 'celery -A app.celery:celeryApp
 dev-tunnel = { cmd = "cloudflared tunnel run --token $CLOUDFLARE_TUNNEL_TOKEN", envfile = ".env.dev" }
 rag-index = { cmd = "python data/pdf/index.py", envfile = ".env.dev" }
 
+prod-celery = { cmd = "watchfiles --filter python 'celery -A app.celery:celeryApp worker --pool=prefork --concurrency=1 --loglevel=INFO' app", envfile = ".env.prod" }
+
 
 [dependency-groups]
 dev = [
