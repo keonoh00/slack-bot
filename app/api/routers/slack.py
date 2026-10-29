@@ -46,7 +46,7 @@ async def receiveEvents(request: Request) -> dict[str, str | bool]:
             replyToSlack.delay,
             event.channel,
             event.text,
-            event.threadTs or event.ts,
+            threadTs,
             event.ts,
         )
 
