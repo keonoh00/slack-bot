@@ -18,10 +18,17 @@ class vLLMSettings(BaseModel):
     MODEL: str
 
 
+class QdrantSettings(BaseModel):
+    URL: str
+    COLLECTION: str
+    MODEL: str
+
+
 class EnvVariables(BaseModel):
     slack: SlackSettings
     redis: RedisSettings
     vllm: vLLMSettings
+    qdrant: QdrantSettings
 
 
 env = EnvVariables(
@@ -36,5 +43,10 @@ env = EnvVariables(
         API_KEY=SecretStr(os.environ["VLLM_API_KEY"]),
         URL=os.environ["VLLM_BASE_URL"],
         MODEL=os.environ["VLLM_MODEL"],
+    ),
+    qdrant=QdrantSettings(
+        URL=os.environ["QDRANT_URL"],
+        COLLECTION=os.environ["QDRANT_COLLECTION"],
+        MODEL=os.environ["QDRANT_EMBEDDING_MODEL_NAME"],
     ),
 )
