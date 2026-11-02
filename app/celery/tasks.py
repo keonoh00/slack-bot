@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 
 async def generateReply(text: str, history: list[BaseMessage]) -> dict:
     answer = await askAgent(text, history)
-    logger.info("Agent completed")
+    logger.info("Agent answer: %s", answer)
 
     formatted = await formatForSlack(text, answer)
-    logger.info("Slack formatting completed")
+    logger.info("Formatted answer: %s", formatted)
 
     return toSlackPayload(formatted)
 
