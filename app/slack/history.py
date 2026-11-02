@@ -18,6 +18,7 @@ async def getThreadHistory(
             channel=channel,
             ts=threadTs,
             latest=beforeTs,
+            inclusive=False,
             limit=15,
             **({"cursor": cursor} if cursor else {}),
         )
@@ -39,6 +40,9 @@ async def getThreadHistory(
             continue
 
         if message.get("subtype") not in (None, "bot_message"):
+            continue
+
+        if message.get("ts") == beforeTs:
             continue
 
         text = message.get("text", "").strip()
