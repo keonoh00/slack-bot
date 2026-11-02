@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 from typing import Annotated, TypedDict
 
@@ -12,6 +13,8 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
+
+logger = logging.getLogger(__name__)
 
 MAX_INPUT_TOKENS = 12000
 MAX_OUTPUT_TOKENS = 2048
@@ -92,6 +95,9 @@ def buildAgent():
             max_tokens=MAX_OUTPUT_TOKENS,
         ).ainvoke(messages)
 
+        logger.info("Tool calls: %s", response.tool_calls)
+        logger.info("Invalid tool calls: %s", response.invalid_tool_calls)
+
         return {"messages": [response]}
 
     builder = StateGraph(AgentState)
@@ -126,10 +132,19 @@ async def askAgent(
     if not messages:
         return "입력 Context가 너무 길어 처리할 수 없습니다."
 
+    logger.info(
+        "Conversation context: %d messages",
+        len(messages),
+    )
+
     initialState: AgentState = {
         "messages": messages,
     }
 
     result = await buildAgent().ainvoke(initialState)
+
+    for message in result["messages"]:
+        if isinstance(message, ToolMessage):
+            logger.info("Executed tool: %s", message.name)
 
     return str(result["messages"][-1].content)
