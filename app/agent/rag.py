@@ -20,7 +20,21 @@ MAX_RAG_TOKENS = 2500
 def getEncoder():
     from sentence_transformers import SentenceTransformer
 
-    return SentenceTransformer(MODEL_NAME, local_files_only=True)
+    return SentenceTransformer(
+        MODEL_NAME,
+        local_files_only=True,
+    )
+
+
+def embedQuery(query: str) -> list[float]:
+    return (
+        getEncoder()
+        .encode_query(
+            query,
+            normalize_embeddings=True,
+        )
+        .tolist()
+    )
 
 
 def limitResults(results: list[dict]) -> list[dict]:
@@ -47,18 +61,10 @@ def limitResults(results: list[dict]) -> list[dict]:
     return selected
 
 
-def embedQuery(query: str) -> list[float]:
-    return (
-        getEncoder()
-        .encode_query(
-            query,
-            normalize_embeddings=True,
-        )
-        .tolist()
-    )
-
-
-async def _searchDocument(query: str, limit: int = 5) -> list[dict]:
+async def _searchDocument(
+    query: str,
+    limit: int = 5,
+) -> list[dict]:
     if not query.strip():
         raise ValueError("Search query cannot be empty.")
 
@@ -109,7 +115,12 @@ async def main() -> None:
     parser = argparse.ArgumentParser(
         description="Search indexed PDF documents in Qdrant."
     )
-    parser.add_argument("query", help="Natural language search query")
+
+    parser.add_argument(
+        "query",
+        help="Natural language search query",
+    )
+
     parser.add_argument(
         "--limit",
         type=int,
