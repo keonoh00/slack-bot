@@ -36,6 +36,7 @@ def embedQuery(query: str) -> list[float]:
             .encode_query(
                 query,
                 normalize_embeddings=True,
+                show_progress_bar=False,
             )
             .tolist()
         )
