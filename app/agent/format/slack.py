@@ -87,7 +87,7 @@ def toSlackPayload(text: str) -> dict:
         return {"text": text}
 
     return {
-        "text": text[:300],
+        "text": text,
         "blocks": [
             {
                 "type": "markdown",
