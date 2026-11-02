@@ -119,15 +119,9 @@ async def _searchDocument(
 @tool
 async def searchRAGTool(query: str, limit: int = 5) -> list[dict]:
     """
-    Search Qdrant for document chunks semantically similar to the query.
-
-    Args:
-        query: Natural language search query.
-        limit: Maximum number of matching chunks to return.
-
-    Returns:
-        List of matching chunks containing similarity scores,
-        document text, section information, and page numbers.
+    Search indexed documents for factual information about projects,
+    budgets, schedules, targets, and technical requirements.
+    Use specific queries with relevant context and constraints.
     """
     return await _searchDocument(query, limit)
 
