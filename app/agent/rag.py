@@ -73,6 +73,9 @@ async def _searchDocument(
     if not query.strip():
         raise ValueError("Search query cannot be empty.")
 
+    if limit < 1:
+        raise ValueError("Search limit must be greater than zero.")
+
     # Generate query embedding without blocking the event loop.
     vector = await asyncio.to_thread(embedQuery, query)
 
