@@ -5,6 +5,7 @@ from langchain_core.messages import (
     BaseMessage,
     HumanMessage,
     SystemMessage,
+    ToolMessage,
 )
 from langchain_core.messages.utils import trim_messages
 from langchain_openai import ChatOpenAI
@@ -59,7 +60,15 @@ def buildAgent():
         },
     )
 
-    modelWithTools = model.bind_tools(tools)
+    modelWithTools = model.bind_tools(
+        tools,
+        tool_choice="auto",
+    )
+
+    modelWithRequiredTool = model.bind_tools(
+        tools,
+        tool_choice="required",
+    )
 
     async def agent(state: AgentState):
         messages = [
@@ -67,7 +76,14 @@ def buildAgent():
             *state["messages"],
         ]
 
-        response = await modelWithTools.bind(
+        hasSearched = any(
+            isinstance(message, ToolMessage) and message.name == searchRAGTool.name
+            for message in state["messages"]
+        )
+
+        selectedModel = modelWithTools if hasSearched else modelWithRequiredTool
+
+        response = await selectedModel.bind(
             max_tokens=MAX_OUTPUT_TOKENS,
         ).ainvoke(messages)
 
