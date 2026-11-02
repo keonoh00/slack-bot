@@ -10,7 +10,6 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.messages.utils import count_tokens_approximately
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_openai import ChatOpenAI
@@ -116,18 +115,11 @@ def buildAgent():
 
     modelWithTools = model.bind_tools(tools)
 
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", SYSTEM_PROMPT),
-            MessagesPlaceholder("messages"),
-        ]
-    )
-
     async def agent(state: MessagesState):
-
-        messages: Sequence[BaseMessage] = prompt.format_messages(
-            messages=state["messages"]
-        )
+        messages: Sequence[BaseMessage] = [
+            SystemMessage(content=SYSTEM_PROMPT),
+            *state["messages"],
+        ]
 
         while True:
             maxOutputTokens = getOutputBudget(messages, tools)
