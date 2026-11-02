@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import logging
 import threading
 from functools import lru_cache
 
@@ -10,6 +11,8 @@ from langchain_core.tools import tool
 from qdrant_client import AsyncQdrantClient
 
 from app.config.env import env
+
+logger = logging.getLogger(__name__)
 
 MODEL_NAME = env.qdrant.MODEL
 COLLECTION = env.qdrant.COLLECTION
@@ -76,10 +79,12 @@ async def _searchDocument(
     if limit < 1:
         raise ValueError("Search limit must be greater than zero.")
 
-    # Generate query embedding without blocking the event loop.
+    logger.info("Generating query embedding")
+
     vector = await asyncio.to_thread(embedQuery, query)
 
-    # Search Qdrant asynchronously.
+    logger.info("Query embedding generated")
+
     client = AsyncQdrantClient(url=QDRANT_URL)
 
     try:
@@ -100,7 +105,15 @@ async def _searchDocument(
         for point in response.points
     ]
 
-    return limitResults(results)
+    selected = limitResults(results)
+
+    logger.info(
+        "RAG retrieved %d results, retained %d",
+        len(results),
+        len(selected),
+    )
+
+    return selected
 
 
 @tool
