@@ -72,7 +72,7 @@ async def getThreadHistory(
         if not text:
             continue
 
-        if message.get("bot_id"):
+        if message.get("bot_id") or message.get("subtype") == "bot_message":
             history.append(AIMessage(content=text))
         else:
             history.append(HumanMessage(content=text))
