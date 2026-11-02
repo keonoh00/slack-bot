@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Annotated, TypedDict
 
 from langchain_core.messages import (
     BaseMessage,
@@ -7,7 +8,8 @@ from langchain_core.messages import (
 )
 from langchain_core.messages.utils import trim_messages
 from langchain_openai import ChatOpenAI
-from langgraph.graph import START, MessagesState, StateGraph
+from langgraph.graph import START, StateGraph
+from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 
 MAX_INPUT_TOKENS = 12000
@@ -35,6 +37,10 @@ explain what could and could not be verified.
 """
 
 
+class AgentState(TypedDict):
+    messages: Annotated[list[BaseMessage], add_messages]
+
+
 @lru_cache(maxsize=1)
 def buildAgent():
     from app.agent.rag import searchRAGTool
@@ -55,7 +61,7 @@ def buildAgent():
 
     modelWithTools = model.bind_tools(tools)
 
-    async def agent(state: MessagesState):
+    async def agent(state: AgentState):
         messages = [
             SystemMessage(content=SYSTEM_PROMPT),
             *state["messages"],
@@ -67,7 +73,7 @@ def buildAgent():
 
         return {"messages": [response]}
 
-    builder = StateGraph(MessagesState)
+    builder = StateGraph(AgentState)
 
     builder.add_node("agent", agent)
     builder.add_node("tools", ToolNode(tools))
@@ -99,6 +105,10 @@ async def askAgent(
     if not messages:
         return "입력 Context가 너무 길어 처리할 수 없습니다."
 
-    result = await buildAgent().ainvoke({"messages": messages})
+    initialState: AgentState = {
+        "messages": messages,
+    }
+
+    result = await buildAgent().ainvoke(initialState)
 
     return str(result["messages"][-1].content)
