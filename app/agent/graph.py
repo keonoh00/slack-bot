@@ -19,6 +19,9 @@ MAX_OUTPUT_TOKENS = 2048
 SYSTEM_PROMPT = """
 You are a helpful AI assistant that answers questions in Korean.
 
+Use conversation history to understand follow-up questions.
+Resolve references to previous questions and answers.
+
 When answering questions about reference documents:
 
 1. Search using searchRAGTool before answering.
