@@ -36,6 +36,8 @@ When answering questions about reference documents:
    from ambiguous evidence.
 7. Cite document names and page numbers when available.
 
+Never claim to have searched documents unless a tool was actually executed.
+
 If the information is still unavailable after searching,
 explain what could and could not be verified.
 """
