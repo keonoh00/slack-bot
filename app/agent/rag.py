@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import threading
 from functools import lru_cache
 
 from langchain_core.messages import ToolMessage
@@ -15,6 +16,8 @@ COLLECTION = env.qdrant.COLLECTION
 QDRANT_URL = env.qdrant.URL
 MAX_RAG_TOKENS = 2500
 
+embeddingLock = threading.Lock()
+
 
 @lru_cache(maxsize=1)
 def getEncoder():
@@ -27,14 +30,15 @@ def getEncoder():
 
 
 def embedQuery(query: str) -> list[float]:
-    return (
-        getEncoder()
-        .encode_query(
-            query,
-            normalize_embeddings=True,
+    with embeddingLock:
+        return (
+            getEncoder()
+            .encode_query(
+                query,
+                normalize_embeddings=True,
+            )
+            .tolist()
         )
-        .tolist()
-    )
 
 
 def limitResults(results: list[dict]) -> list[dict]:
