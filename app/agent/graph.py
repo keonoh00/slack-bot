@@ -1,24 +1,18 @@
-import os
-from collections.abc import Sequence
 from functools import lru_cache
 
 from langchain_core.messages import (
-    AIMessage,
     BaseMessage,
     HumanMessage,
     SystemMessage,
-    ToolMessage,
 )
-from langchain_core.messages.utils import count_tokens_approximately
-from langchain_core.tools import BaseTool
-from langchain_core.utils.function_calling import convert_to_openai_tool
+from langchain_core.messages.utils import trim_messages
 from langchain_openai import ChatOpenAI
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
-SAFETY_MARGIN = 2048
-MIN_OUTPUT_TOKENS = 1024
-MIN_TOOL_LENGTH = 512
+MAX_INPUT_TOKENS = 12000
+MAX_OUTPUT_TOKENS = 2048
+
 SYSTEM_PROMPT = """
 You are a helpful AI assistant that answers questions in Korean.
 
@@ -41,66 +35,12 @@ explain what could and could not be verified.
 """
 
 
-def getOutputBudget(
-    messages: Sequence[BaseMessage],
-    tools: list[BaseTool],
-) -> int:
-    """Estimate available output tokens within the configured context window."""
-    inputTokens = count_tokens_approximately(
-        messages,
-        tools=[convert_to_openai_tool(tool) for tool in tools],
-        chars_per_token=2.0,
-    )
-
-    return int(os.environ["VLLM_MAX_LEN"]) - inputTokens - SAFETY_MARGIN
-
-
-def reduceContext(messages: Sequence[BaseMessage]) -> list[BaseMessage] | None:
-    """Remove older turns or shorten tool outputs to reduce context usage."""
-    humanIndices = [
-        i for i, message in enumerate(messages) if isinstance(message, HumanMessage)
-    ]
-
-    if len(humanIndices) >= 2:
-        systemMessages = [
-            message
-            for message in messages[: humanIndices[0]]
-            if isinstance(message, SystemMessage)
-        ]
-        return systemMessages + list(messages[humanIndices[1] :])
-
-    for i in reversed(range(len(messages))):
-        message = messages[i]
-
-        if not isinstance(message, ToolMessage):
-            continue
-
-        if not isinstance(message.content, str):
-            continue
-
-        if len(message.content) <= MIN_TOOL_LENGTH:
-            continue
-
-        shortened = message.model_copy(
-            update={
-                "content": (
-                    message.content[: len(message.content) // 2]
-                    + "\n[일부 검색 결과 생략]"
-                )
-            }
-        )
-
-        return [*messages[:i], shortened, *messages[i + 1 :]]
-
-    return None
-
-
 @lru_cache(maxsize=1)
 def buildAgent():
     from app.agent.rag import searchRAGTool
     from app.config.env import env
 
-    tools: list[BaseTool] = [searchRAGTool]
+    tools = [searchRAGTool]
 
     model = ChatOpenAI(
         model=env.vllm.MODEL,
@@ -116,33 +56,14 @@ def buildAgent():
     modelWithTools = model.bind_tools(tools)
 
     async def agent(state: MessagesState):
-        messages: Sequence[BaseMessage] = [
+        messages = [
             SystemMessage(content=SYSTEM_PROMPT),
             *state["messages"],
         ]
 
-        while True:
-            maxOutputTokens = getOutputBudget(messages, tools)
-
-            if maxOutputTokens >= MIN_OUTPUT_TOKENS:
-                break
-
-            reduced = reduceContext(messages)
-
-            if reduced is None:
-                return {
-                    "messages": [
-                        AIMessage(
-                            content="입력 Context가 너무 길어 처리할 수 없습니다."
-                        )
-                    ]
-                }
-
-            messages = reduced
-
-        response = await modelWithTools.bind(max_tokens=maxOutputTokens).ainvoke(
-            messages
-        )
+        response = await modelWithTools.bind(
+            max_tokens=MAX_OUTPUT_TOKENS,
+        ).ainvoke(messages)
 
         return {"messages": [response]}
 
@@ -158,8 +79,25 @@ def buildAgent():
     return builder.compile()
 
 
-async def askAgent(text: str, history: list[BaseMessage] | None = None) -> str:
-    messages = [*(history or []), HumanMessage(content=text)]
+async def askAgent(
+    text: str,
+    history: list[BaseMessage] | None = None,
+) -> str:
+    messages = trim_messages(
+        [
+            *(history or []),
+            HumanMessage(content=text),
+        ],
+        max_tokens=MAX_INPUT_TOKENS,
+        token_counter="approximate",
+        strategy="last",
+        start_on="human",
+        end_on="human",
+        allow_partial=False,
+    )
+
+    if not messages:
+        return "입력 Context가 너무 길어 처리할 수 없습니다."
 
     result = await buildAgent().ainvoke({"messages": messages})
 
