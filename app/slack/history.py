@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from app.slack.services import slackClient
@@ -8,7 +10,7 @@ async def getThreadHistory(
     threadTs: str,
     beforeTs: str,
 ) -> list[BaseMessage]:
-    history: list[BaseMessage] = []
+    rawMessages = []
     cursor = None
 
     while True:
@@ -20,26 +22,33 @@ async def getThreadHistory(
             **({"cursor": cursor} if cursor else {}),
         )
 
-        for message in response.get("messages", []):
-            if message.get("type") != "message":
-                continue
-
-            if message.get("subtype") not in (None, "bot_message"):
-                continue
-
-            text = message.get("text", "").strip()
-
-            if not text:
-                continue
-
-            if message.get("bot_id"):
-                history.append(AIMessage(content=text))
-            else:
-                history.append(HumanMessage(content=text))
+        rawMessages.extend(response.get("messages", []))
 
         cursor = response.get("response_metadata", {}).get("next_cursor")
 
         if not cursor:
             break
+
+    # Ensure chronological ordering across all pages.
+    rawMessages.sort(key=lambda message: Decimal(message.get("ts", "0")))
+
+    history: list[BaseMessage] = []
+
+    for message in rawMessages:
+        if message.get("type") != "message":
+            continue
+
+        if message.get("subtype") not in (None, "bot_message"):
+            continue
+
+        text = message.get("text", "").strip()
+
+        if not text:
+            continue
+
+        if message.get("bot_id"):
+            history.append(AIMessage(content=text))
+        else:
+            history.append(HumanMessage(content=text))
 
     return history
