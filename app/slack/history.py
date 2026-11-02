@@ -45,7 +45,29 @@ async def getThreadHistory(
         if message.get("ts") == beforeTs:
             continue
 
-        text = message.get("text", "").strip()
+        blocks = message.get("blocks", [])
+        texts = []
+
+        for block in blocks:
+            if block.get("type") == "markdown":
+                value = block.get("text")
+
+            elif block.get("type") == "section":
+                value = block.get("text")
+
+                if isinstance(value, dict):
+                    value = value.get("text")
+
+            else:
+                continue
+
+            if isinstance(value, str) and value.strip():
+                texts.append(value)
+
+        text = "\n\n".join(texts).strip()
+
+        if not text:
+            text = (message.get("text") or "").strip()
 
         if not text:
             continue
