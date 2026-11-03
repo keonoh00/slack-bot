@@ -36,12 +36,3 @@ type SlackPayload = Annotated[
 ]
 
 slackPayloadAdapter = TypeAdapter(SlackPayload)
-
-
-class ThreadMessage(BaseModel):
-    user: str | None = None
-    text: str = ""
-
-
-class ThreadResponse(BaseModel):
-    messages: list[ThreadMessage]
