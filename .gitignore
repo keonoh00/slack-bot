@@ -15,7 +15,8 @@ wheels/
 # Redis data
 redis-data/
 
-data/pdf/devops.pdf
+# Indexed documents
+data/pdf/*.pdf
 
 # Qdrant data
 qdrant-data/
