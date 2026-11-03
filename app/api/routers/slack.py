@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from app.celery.tasks import replyToSlack
 from app.slack.schemas import EventCallback, UrlVerification, slackPayloadAdapter
-from app.slack.services import signatureVerifier
+from app.slack.services import claimEvent, releaseEvent, signatureVerifier
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +46,22 @@ async def receiveEvents(request: Request) -> dict[str, str | bool]:
         if event.type != "app_mention" or event.botId is not None:
             return {"ok": True}
 
+        if not await claimEvent(payload.eventId):
+            logger.info("Skipping duplicate event %s", payload.eventId)
+            return {"ok": True}
+
         threadTs = event.threadTs or event.ts
-        await asyncio.to_thread(
-            replyToSlack.delay,
-            event.channel,
-            event.text,
-            threadTs,
-            event.ts,
-        )
+
+        try:
+            await asyncio.to_thread(
+                replyToSlack.delay,
+                event.channel,
+                event.text,
+                threadTs,
+                event.ts,
+            )
+        except Exception:
+            await releaseEvent(payload.eventId)
+            raise
 
     return {"ok": True}
