@@ -1,5 +1,6 @@
 import argparse
 import os
+import uuid
 from pathlib import Path
 
 import pymupdf4llm
@@ -10,9 +11,36 @@ COLLECTION = os.environ["QDRANT_COLLECTION"]
 MODEL_NAME = os.environ["QDRANT_EMBEDDING_MODEL_NAME"]
 
 
-def ingestPdf(pdfPath: Path) -> None:
-    from sentence_transformers import SentenceTransformer
+def ensureCollection(client: QdrantClient, dimension: int, recreate: bool) -> None:
+    if recreate and client.collection_exists(COLLECTION):
+        client.delete_collection(COLLECTION)
 
+    if not client.collection_exists(COLLECTION):
+        client.create_collection(
+            collection_name=COLLECTION,
+            vectors_config=models.VectorParams(
+                size=dimension,
+                distance=models.Distance.COSINE,
+            ),
+        )
+
+    vectors = client.get_collection(COLLECTION).config.params.vectors
+
+    if not isinstance(vectors, models.VectorParams) or vectors.size != dimension:
+        raise ValueError(
+            f"Collection {COLLECTION} does not match the embedding dimension "
+            f"{dimension}. Run with --recreate to rebuild it."
+        )
+
+    client.create_payload_index(
+        collection_name=COLLECTION,
+        field_name="source",
+        field_schema=models.PayloadSchemaType.KEYWORD,
+        wait=True,
+    )
+
+
+def ingestPdf(pdfPath: Path, client: QdrantClient, encoder) -> None:
     if not pdfPath.is_file():
         raise FileNotFoundError(pdfPath)
 
@@ -30,27 +58,23 @@ def ingestPdf(pdfPath: Path) -> None:
     if not chunks:
         raise ValueError("Text Extraction Failed")
 
-    print(f"Chunks: {len(chunks)}")
+    print(f"{pdfPath.name} chunks: {len(chunks)}")
     print(f"Diagnostics: {document.diagnostics}")
 
-    encoder = SentenceTransformer(MODEL_NAME)
-
-    dimension = encoder.get_embedding_dimension()
-
-    if dimension is None:
-        raise ValueError("Embedding Dimension cannot be verified")
-
-    client = QdrantClient(url=QDRANT_URL)
-
-    if client.collection_exists(COLLECTION):
-        client.delete_collection(COLLECTION)
-
-    client.create_collection(
+    # Re-indexing a file replaces its previous chunks and leaves other files intact.
+    client.delete(
         collection_name=COLLECTION,
-        vectors_config=models.VectorParams(
-            size=dimension,
-            distance=models.Distance.COSINE,
+        points_selector=models.FilterSelector(
+            filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="source",
+                        match=models.MatchValue(value=pdfPath.name),
+                    )
+                ]
+            )
         ),
+        wait=True,
     )
 
     batchSize = 32
@@ -72,10 +96,12 @@ def ingestPdf(pdfPath: Path) -> None:
 
         points = []
 
-        for i, (chunk, vector) in enumerate(zip(batch, vectors)):
+        for i, (chunk, vector) in enumerate(zip(batch, vectors, strict=True)):
             points.append(
                 models.PointStruct(
-                    id=start + i,
+                    id=str(
+                        uuid.uuid5(uuid.NAMESPACE_URL, f"{pdfPath.name}:{start + i}")
+                    ),
                     vector=vector.tolist(),
                     payload={
                         "chunk_id": chunk.id,
@@ -97,12 +123,35 @@ def ingestPdf(pdfPath: Path) -> None:
 
         print(f"Indexed: {min(start + batchSize, len(chunks))}/{len(chunks)}")
 
-    print("PDF indexing completed.")
+    print(f"{pdfPath.name} indexing completed.")
+
+
+def main() -> None:
+    from sentence_transformers import SentenceTransformer
+
+    parser = argparse.ArgumentParser(
+        description="Index PDF documents into Qdrant for document search."
+    )
+    parser.add_argument("pdfs", type=Path, nargs="+")
+    parser.add_argument(
+        "--recreate",
+        action="store_true",
+        help="Drop the collection and every indexed document before indexing",
+    )
+    args = parser.parse_args()
+
+    encoder = SentenceTransformer(MODEL_NAME)
+    dimension = encoder.get_embedding_dimension()
+
+    if dimension is None:
+        raise ValueError("Embedding Dimension cannot be verified")
+
+    client = QdrantClient(url=QDRANT_URL)
+    ensureCollection(client, dimension, args.recreate)
+
+    for pdfPath in args.pdfs:
+        ingestPdf(pdfPath, client, encoder)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("pdf", type=Path)
-    args = parser.parse_args()
-
-    ingestPdf(args.pdf)
+    main()
